@@ -1,0 +1,197 @@
+// src/context/AppContext.js
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import * as Location from 'expo-location';
+import {
+  ensureSignedIn,
+  sendSOS,
+  resolveSOSAsVictim,
+  listenToMyAlert,
+  listenForAlerts,
+  acceptSOS,
+  completeSOSAsResponder,
+  getDistanceKm,
+} from '../services/SOSService';
+
+const AppContext = createContext(null);
+
+export const SOS_STATUS = {
+  IDLE: 'idle',
+  COUNTDOWN: 'countdown',
+  BROADCASTING: 'broadcasting',
+  ACCEPTED: 'accepted',
+  RESOLVED: 'resolved',
+};
+
+export const USER_ROLE = {
+  VICTIM: 'victim',
+  RESPONDER: 'responder',
+};
+
+export function AppProvider({ children }) {
+  const [userRole, setUserRole] = useState(USER_ROLE.VICTIM);
+  const [sosStatus, setSosStatus] = useState(SOS_STATUS.IDLE);
+  const [countdown, setCountdown] = useState(5);
+  const [userLocation, setUserLocation] = useState(null);
+  const [activeAlertId, setActiveAlertId] = useState(null);
+  const [activeAlertData, setActiveAlertData] = useState(null);
+  const [incomingAlerts, setIncomingAlerts] = useState([]);
+  const [responderActiveAlert, setResponderActiveAlert] = useState(null);
+  const [responderAvailable, setResponderAvailable] = useState(true);
+  const [emergencyHistory, setEmergencyHistory] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [responderName, setResponderName] = useState('Responder');
+
+  const countdownRef = useRef(null);
+  const alertListenerRef = useRef(null);
+  const feedListenerRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await ensureSignedIn();
+        setUserId(user.uid);
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        }
+      } catch (e) {
+        console.warn('Init error:', e);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (userRole !== USER_ROLE.RESPONDER || !responderAvailable) {
+      if (feedListenerRef.current) { feedListenerRef.current(); feedListenerRef.current = null; }
+      if (userRole !== USER_ROLE.RESPONDER) setIncomingAlerts([]);
+      return;
+    }
+    feedListenerRef.current = listenForAlerts((alerts) => {
+      const enriched = alerts
+        .filter(a => a.status === 'broadcasting' || a.id === responderActiveAlert?.id)
+        .map(a => ({
+          ...a,
+          distance: userLocation
+            ? getDistanceKm(userLocation.lat, userLocation.lng, a.lat, a.lng)
+            : 0,
+        }));
+      setIncomingAlerts(enriched);
+    });
+    return () => { if (feedListenerRef.current) feedListenerRef.current(); };
+  }, [userRole, responderAvailable, userLocation]);
+
+  const startSOS = () => {
+    setSosStatus(SOS_STATUS.COUNTDOWN);
+    setCountdown(5);
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          broadcastSOS();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const broadcastSOS = async () => {
+    setSosStatus(SOS_STATUS.BROADCASTING);
+    try {
+      const lat = userLocation?.lat ?? 19.2403;
+      const lng = userLocation?.lng ?? 73.1305;
+      const alertId = await sendSOS(lat, lng);
+      setActiveAlertId(alertId);
+      alertListenerRef.current = listenToMyAlert(alertId, (data) => {
+        setActiveAlertData(data);
+        if (data.status === 'accepted') setSosStatus(SOS_STATUS.ACCEPTED);
+        if (data.status === 'resolved') {
+          setSosStatus(SOS_STATUS.RESOLVED);
+          setEmergencyHistory(prev => [{
+            id: alertId,
+            date: new Date().toISOString(),
+            responder: data.responderName || 'Unknown',
+            status: 'Resolved',
+          }, ...prev]);
+          setTimeout(() => {
+            setSosStatus(SOS_STATUS.IDLE);
+            setActiveAlertId(null);
+            setActiveAlertData(null);
+          }, 3000);
+        }
+      });
+    } catch (e) {
+      console.error('SOS broadcast failed:', e);
+      setSosStatus(SOS_STATUS.IDLE);
+    }
+  };
+
+  const cancelSOS = async () => {
+    clearInterval(countdownRef.current);
+    if (activeAlertId) {
+      await resolveSOSAsVictim(activeAlertId).catch(() => {});
+      if (alertListenerRef.current) { alertListenerRef.current(); alertListenerRef.current = null; }
+    }
+    setSosStatus(SOS_STATUS.IDLE);
+    setCountdown(5);
+    setActiveAlertId(null);
+    setActiveAlertData(null);
+  };
+
+  const resolveEmergency = async () => {
+    if (activeAlertId) await resolveSOSAsVictim(activeAlertId).catch(() => {});
+  };
+
+  const acceptAlert = async (alert) => {
+    try {
+      await acceptSOS(alert.id, responderName);
+      setResponderActiveAlert(alert);
+    } catch (e) {
+      console.error('Accept failed:', e);
+    }
+  };
+
+  const completeAlert = async (alertId) => {
+    try {
+      await completeSOSAsResponder(alertId);
+      setResponderActiveAlert(null);
+    } catch (e) {
+      console.error('Complete failed:', e);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (alertListenerRef.current) alertListenerRef.current();
+      if (feedListenerRef.current) feedListenerRef.current();
+    };
+  }, []);
+
+  return (
+    <AppContext.Provider value={{
+      userRole, setUserRole,
+      sosStatus, countdown,
+      startSOS, cancelSOS, resolveEmergency,
+      userLocation,
+      activeAlertData,
+      incomingAlerts,
+      acceptAlert,
+      completeAlert,
+      emergencyHistory,
+      responderAvailable, setResponderAvailable,
+      responderActiveAlert,
+      responderName, setResponderName,
+      userId,
+      nearbyResponders: [],
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp() {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useApp must be used inside AppProvider');
+  return ctx;
+}

@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Nearby Emergency Responder",
+    "slug": "nearby-emergency-responder",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.nearbyresponder",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to alert nearby responders during an emergency.",
+        "NSLocationAlwaysUsageDescription": "We need background location to broadcast your position during an SOS event."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E8302A"
+      },
+      "package": "com.example.nearbyresponder",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Nearby Emergency Responder to use your location."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sos_alert.wav"]
+        }
+      ]
+    ]
+  }
+}
