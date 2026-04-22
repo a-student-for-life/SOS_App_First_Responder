@@ -58,6 +58,18 @@ export async function sendBroadcastingNotification() {
   });
 }
 
+export async function sendSMSConfirmationNotification(contactCount) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: '✉️ Trusted Contacts Alerted',
+      body: `Emergency SMS and location sent to ${contactCount} trusted contacts.`,
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    },
+    trigger: null,
+  });
+}
+
 export function addNotificationListener(handler) {
   return Notifications.addNotificationReceivedListener(handler);
 }

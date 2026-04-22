@@ -1,45 +1,45 @@
 // src/theme.js
 export const COLORS = {
   // Core brand
-  danger: '#E8302A',
-  dangerLight: '#FDECEA',
-  dangerDark: '#B71C1C',
-  primary: '#1A73E8',
-  primaryLight: '#E8F0FE',
-  success: '#1B8B44',
-  successLight: '#E6F4EA',
-  warning: '#F29900',
-  warningLight: '#FEF3E2',
+  danger: '#FF3B30', // Vibrant red for high visibility
+  dangerLight: 'rgba(255, 59, 48, 0.15)',
+  dangerDark: '#D70015',
+  primary: '#0A84FF', // Bright iOS-style blue
+  primaryLight: 'rgba(10, 132, 255, 0.15)',
+  success: '#32D74B', // Vibrant green
+  successLight: 'rgba(50, 215, 75, 0.15)',
+  warning: '#FFD60A', // Vibrant yellow
+  warningLight: 'rgba(255, 214, 10, 0.15)',
 
-  // UI
-  background: '#F5F5F5',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F8F9FA',
-  border: '#E0E0E0',
-  borderLight: '#F0F0F0',
+  // UI (High-Contrast Dark)
+  background: '#000000', // Pure black for OLED efficiency and high contrast
+  surface: '#1C1C1E', // Dark gray surface
+  surfaceAlt: '#2C2C2E', // Slightly lighter surface
+  border: '#3A3A3C',
+  borderLight: '#2C2C2E',
 
   // Text
-  text: '#1A1A1A',
-  textSecondary: '#5F6368',
-  textMuted: '#9AA0A6',
+  text: '#FFFFFF',
+  textSecondary: '#EBEBF5',
+  textMuted: '#8E8E93',
 
   // Emergency type colors
-  medical: '#E53935',
-  accident: '#FB8C00',
-  fire: '#E91E63',
-  security: '#5C6BC0',
+  medical: '#FF3B30',
+  accident: '#FF9500',
+  fire: '#FF453A',
+  security: '#5E5CE6',
 };
 
 export const FONTS = {
   regular: 'System',
   size: {
-    xs: 11,
-    sm: 13,
-    md: 15,
-    lg: 17,
-    xl: 20,
-    xxl: 28,
-    xxxl: 48,
+    xs: 12,
+    sm: 14,
+    md: 16,
+    lg: 18,
+    xl: 22,
+    xxl: 30,
+    xxxl: 52,
   },
 };
 
@@ -53,10 +53,10 @@ export const SPACING = {
 };
 
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
   round: 999,
 };
 
@@ -64,22 +64,22 @@ export const SHADOW = {
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 6,
   },
   lg: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowColor: '#FF3B30', // Red glow for emergency elements
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 10,
   },
 };

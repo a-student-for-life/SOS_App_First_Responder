@@ -1,20 +1,11 @@
 // src/services/firebase.js
-// ─────────────────────────────────────────────────────────
-// SETUP INSTRUCTIONS:
-//  1. Go to https://console.firebase.google.com
-//  2. Create a new project (e.g. "NearbyResponder")
-//  3. Add a Web app inside the project
-//  4. Copy the firebaseConfig values shown and paste below
-//  5. In Firebase console → Firestore Database → Create database (start in test mode)
-//  6. In Firebase console → Authentication → Sign-in method → Enable "Anonymous"
-// ─────────────────────────────────────────────────────────
-
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-   apiKey: "AIzaSyBI_IaIHWZI4uSaLuEM2fNP4u6n5vtXPU8",
+  apiKey: "AIzaSyBI_IaIHWZI4uSaLuEM2fNP4u6n5vtXPU8",
   authDomain: "nearbyresponder.firebaseapp.com",
   projectId: "nearbyresponder",
   storageBucket: "nearbyresponder.firebasestorage.app",
@@ -24,5 +15,18 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+
+/**
+ * ULTRA-STABLE CONFIGURATION FOR ANDROID EMULATORS/MOBILE
+ * 1. experimentalForceLongPolling: True forces HTTP standard requests (no streams).
+ * 2. experimentalAutoDetectLongPolling: False ensures it doesn't try to switch back.
+ * 3. Use standard getFirestore for simpler setups if needed, but initializeFirestore is better for these flags.
+ */
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false,
+});
+
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});

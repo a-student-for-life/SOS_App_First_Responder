@@ -21,9 +21,15 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+        }
+      }
     },
     "plugins": [
       [
@@ -32,12 +38,12 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Nearby Emergency Responder to use your location."
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "sounds": ["./assets/sos_alert.wav"]
-        }
-      ]
-    ]
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3fd5741b-81e3-4663-9d6b-86f979fd3159"
+      }
+    }
   }
 }

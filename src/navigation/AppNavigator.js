@@ -10,6 +10,7 @@ import AlertInboxScreen from '../screens/AlertInboxScreen';
 import NavigateScreen from '../screens/NavigateScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HistoryScreen from '../screens/HistoryScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 import { useApp, USER_ROLE } from '../context/AppContext';
 import { COLORS } from '../theme';
 
@@ -59,19 +60,17 @@ function ResponderTabs() {
 }
 
 export default function AppNavigator() {
-  const { userRole, sosStatus } = useApp();
+  const { userRole, userId } = useApp();
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {userRole === USER_ROLE.VICTIM ? (
-          <>
-            <Stack.Screen name="VictimMain" component={VictimTabs} />
-          </>
+        {!userId ? (
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        ) : userRole === USER_ROLE.VICTIM ? (
+          <Stack.Screen name="VictimMain" component={VictimTabs} />
         ) : (
-          <>
-            <Stack.Screen name="ResponderMain" component={ResponderTabs} />
-          </>
+          <Stack.Screen name="ResponderMain" component={ResponderTabs} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

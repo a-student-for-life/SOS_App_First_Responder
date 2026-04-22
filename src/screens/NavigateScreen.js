@@ -8,43 +8,30 @@ import {
   Platform,
   Linking,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
+import WebMapView from '../components/WebMapView';
 import { useApp } from '../context/AppContext';
 import { listenToMyAlert } from '../services/SOSService';
 import { COLORS, SPACING, RADIUS, SHADOW, FONTS } from '../theme';
 
-// Simulated map - in a real app, use react-native-maps
-function MockMapView({ victimLat, victimLng, responderLat, responderLng }) {
+// Real Map View
+function RealMapView({ victimLat, victimLng, responderLat, responderLng }) {
   return (
-    <View style={styles.mockMap}>
-      <Text style={styles.mockMapLabel}>Map View</Text>
-      <View style={styles.mockMapContent}>
-        {/* Victim marker */}
-        <View style={[styles.mapMarker, styles.victimMarker]}>
-          <Icon name="person" size={16} color="#FFF" />
-        </View>
-        <Text style={styles.markerLabel}>Victim</Text>
-        {/* Route line (visual only) */}
-        <View style={styles.routeLine} />
-        {/* Responder marker */}
-        <View style={[styles.mapMarker, styles.responderMarker]}>
-          <Icon name="navigate" size={16} color="#FFF" />
-        </View>
-        <Text style={[styles.markerLabel, { color: COLORS.primary }]}>You</Text>
-      </View>
-      <View style={styles.coordsRow}>
-        <Text style={styles.coordText}>
-          Victim: {victimLat?.toFixed(4)}, {victimLng?.toFixed(4)}
-        </Text>
-      </View>
-    </View>
+    <WebMapView
+      victimLat={victimLat}
+      victimLng={victimLng}
+      responderLat={responderLat}
+      responderLng={responderLng}
+      style={styles.map}
+    />
   );
 }
 
 export default function NavigateScreen({ route }) {
-  const { responderActiveAlert: activeAlert, completeAlert } = useApp();
+  const { responderActiveAlert: activeAlert, completeAlert, userLocation } = useApp();
   const [eta, setEta] = useState(null);
   const [arrived, setArrived] = useState(false);
   const listenerRef = useRef(null);
@@ -94,25 +81,22 @@ export default function NavigateScreen({ route }) {
   const openGoogleMaps = () => {
     if (!alert) return;
     const { lat, lng } = alert;
-    const label = encodeURIComponent('SOS Emergency Location');
 
-    // Try native Google Maps first, fall back to browser
-    const nativeUrl = Platform.select({
-      ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
-      android: `google.navigation:q=${lat},${lng}&mode=d`,
-    });
-    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-
-    Linking.canOpenURL(nativeUrl)
+    // We use a universal URL format that works more reliably across all devices
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    
+    // Attempt to open the universal URL which handles app switching automatically
+    Linking.canOpenURL(googleMapsUrl)
       .then((supported) => {
-        const url = supported ? nativeUrl : webUrl;
-        return Linking.openURL(url);
+        if (supported) {
+          return Linking.openURL(googleMapsUrl);
+        } else {
+          Alert.alert('Error', 'Google Maps is not installed or available.');
+        }
       })
-      .catch(() => {
-        // Final fallback: open in browser
-        Linking.openURL(webUrl).catch(() =>
-          Alert.alert('Error', 'Could not open a maps application.')
-        );
+      .catch((err) => {
+        console.error('Maps error:', err);
+        Alert.alert('Error', 'An unexpected error occurred while opening maps.');
       });
   };
 
@@ -136,14 +120,17 @@ export default function NavigateScreen({ route }) {
   if (!alert) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
         <View style={styles.header}>
-          <Text style={styles.title}>Navigate</Text>
+          <Text style={styles.title}>NAVIGATION ENGINE</Text>
         </View>
         <View style={styles.emptyState}>
-          <Icon name="navigate-circle-outline" size={64} color={COLORS.textMuted} />
-          <Text style={styles.emptyTitle}>No active navigation</Text>
+          <View style={styles.emptyIconContainer}>
+            <Icon name="navigate-circle-outline" size={60} color={COLORS.surfaceAlt} />
+          </View>
+          <Text style={styles.emptyTitle}>NO ACTIVE TARGET</Text>
           <Text style={styles.emptySubtitle}>
-            Accept an alert from the inbox to start navigating to a victim's location.
+            Accept an emergency alert from the inbox to start high-priority navigation.
           </Text>
         </View>
       </SafeAreaView>
@@ -152,72 +139,79 @@ export default function NavigateScreen({ route }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Navigating</Text>
+        <View>
+          <Text style={styles.title}>RESPONDING</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.dot, { backgroundColor: arrived ? COLORS.success : COLORS.primary }]} />
+            <Text style={styles.subtitle}>{arrived ? 'TARGET REACHED' : 'EN ROUTE TO VICTIM'}</Text>
+          </View>
+        </View>
         {arrived && (
           <View style={styles.arrivedBadge}>
-            <Text style={styles.arrivedText}>Arrived!</Text>
+            <Icon name="checkmark-done" size={14} color="#FFF" />
+            <Text style={styles.arrivedText}>ARRIVED</Text>
           </View>
         )}
       </View>
 
       {/* Map */}
-      <MockMapView
-        victimLat={alert.lat}
-        victimLng={alert.lng}
-        responderLat={19.2403}
-        responderLng={73.1305}
-      />
+      <View style={styles.mapContainer}>
+        <RealMapView
+          victimLat={alert.lat}
+          victimLng={alert.lng}
+          responderLat={userLocation?.lat || 19.2403}
+          responderLng={userLocation?.lng || 73.1305}
+        />
+        <View style={styles.mapOverlay}>
+           <Text style={styles.coordText}>TARGET: {alert.lat.toFixed(5)}, {alert.lng.toFixed(5)}</Text>
+        </View>
+      </View>
 
       {/* Info Card */}
       <View style={styles.infoCard}>
         {/* Emergency type */}
         <View style={styles.typeRow}>
-          <View style={[styles.typeBadge, { backgroundColor: COLORS.dangerLight }]}>
-            <Text style={[styles.typeText, { color: COLORS.danger }]}>
-              {alert.emergencyType}
+          <View style={[styles.typeBadge, { backgroundColor: COLORS.danger }]}>
+            <Text style={styles.typeText}>
+              {alert.emergencyType.toUpperCase()} EMERGENCY
             </Text>
           </View>
-          <Text style={styles.distanceText}>{alert.distance} km away</Text>
+          <Text style={styles.distanceText}>{alert.distance} KM AWAY</Text>
         </View>
 
         {/* ETA */}
-        <View style={styles.etaRow}>
-          <Icon name="time" size={20} color={arrived ? COLORS.success : COLORS.primary} />
-          <Text style={styles.etaLabel}>ETA</Text>
-          <Text style={[styles.etaValue, { color: arrived ? COLORS.success : COLORS.text }]}>
-            {arrived ? 'Arrived' : `~${eta} min`}
-          </Text>
-        </View>
-
-        {/* Victim coords */}
-        <View style={styles.locationRow}>
-          <Icon name="location" size={16} color={COLORS.textMuted} />
-          <Text style={styles.locationText}>
-            {alert.lat.toFixed(5)}, {alert.lng.toFixed(5)}
-          </Text>
+        <View style={styles.etaContainer}>
+          <View style={styles.etaBox}>
+             <Text style={styles.etaLabel}>ESTIMATED ARRIVAL</Text>
+             <Text style={[styles.etaValue, { color: arrived ? COLORS.success : COLORS.text }]}>
+               {arrived ? 'AT LOCATION' : `${eta} MIN`}
+             </Text>
+          </View>
+          <Icon name="time" size={32} color={arrived ? COLORS.success : COLORS.primary} />
         </View>
 
         {/* Action Buttons */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.mapsBtn} onPress={openGoogleMaps}>
-            <Icon name="navigate" size={18} color="#FFF" />
-            <Text style={styles.mapsBtnText}>Open in Maps</Text>
+          <TouchableOpacity style={styles.mapsBtn} onPress={openGoogleMaps} activeOpacity={0.8}>
+            <Icon name="map" size={20} color="#000" />
+            <Text style={styles.mapsBtnText}>EXTERNAL MAPS</Text>
           </TouchableOpacity>
 
           {arrived && (
-            <TouchableOpacity style={styles.completeBtn} onPress={handleComplete}>
-              <Icon name="checkmark-circle" size={18} color="#FFF" />
-              <Text style={styles.completeBtnText}>Mark Complete</Text>
+            <TouchableOpacity style={styles.completeBtn} onPress={handleComplete} activeOpacity={0.8}>
+              <Icon name="checkmark-circle" size={20} color="#FFF" />
+              <Text style={styles.completeBtnText}>RESOLVE</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Emergency call */}
-        <TouchableOpacity style={styles.callRow} onPress={() => Linking.openURL('tel:112')}>
-          <Icon name="call" size={16} color={COLORS.danger} />
-          <Text style={styles.callText}>Call Emergency Services (112)</Text>
+        <TouchableOpacity style={styles.callBtn} onPress={() => Linking.openURL('tel:112')} activeOpacity={0.7}>
+          <Icon name="call" size={18} color="#FFF" />
+          <Text style={styles.callBtnText}>CALL SERVICES (112)</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -225,212 +219,73 @@ export default function NavigateScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.xl, paddingVertical: SPACING.xl,
+    backgroundColor: COLORS.background, borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  title: {
-    fontSize: FONTS.size.xl,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
+  title: { fontSize: 22, fontWeight: '900', color: COLORS.text, letterSpacing: 1 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  subtitle: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '800' },
   arrivedBadge: {
-    backgroundColor: COLORS.successLight,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.round,
-  },
-  arrivedText: {
-    color: COLORS.success,
-    fontWeight: '700',
-    fontSize: FONTS.size.sm,
-  },
-  mockMap: {
-    flex: 1,
-    backgroundColor: '#E8EDF3',
-    margin: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
-    ...SHADOW.sm,
-  },
-  mockMapLabel: {
-    position: 'absolute',
-    top: SPACING.md,
-    left: SPACING.md,
-    fontSize: FONTS.size.xs,
-    color: COLORS.textMuted,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.success, paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: RADIUS.sm,
   },
-  mockMapContent: {
-    alignItems: 'center',
-    gap: SPACING.sm,
+  arrivedText: { color: '#FFF', fontWeight: '900', fontSize: 10, letterSpacing: 0.5 },
+  mapContainer: {
+    flex: 1, margin: SPACING.lg, borderRadius: RADIUS.lg, overflow: 'hidden',
+    borderWidth: 1, borderColor: COLORS.border, ...SHADOW.md,
   },
-  mapMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  map: { flex: 1 },
+  mapOverlay: {
+    position: 'absolute', bottom: 12, left: 12, right: 12,
+    backgroundColor: 'rgba(0,0,0,0.8)', padding: 8, borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
-  victimMarker: {
-    backgroundColor: COLORS.danger,
-  },
-  responderMarker: {
-    backgroundColor: COLORS.primary,
-  },
-  markerLabel: {
-    fontSize: FONTS.size.xs,
-    fontWeight: '600',
-    color: COLORS.danger,
-  },
-  routeLine: {
-    width: 2,
-    height: 40,
-    backgroundColor: COLORS.textMuted,
-    borderStyle: 'dashed',
-  },
-  coordsRow: {
-    position: 'absolute',
-    bottom: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.sm,
-  },
-  coordText: {
-    fontSize: FONTS.size.xs,
-    color: COLORS.textSecondary,
-  },
+  coordText: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', textAlign: 'center' },
   infoCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    margin: SPACING.xl,
-    marginTop: 0,
-    ...SHADOW.md,
-    gap: SPACING.md,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.xl, padding: SPACING.xl,
+    margin: SPACING.lg, marginTop: 0, borderWidth: 1, borderColor: COLORS.border,
+    ...SHADOW.md, gap: SPACING.lg,
   },
-  typeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  typeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.sm },
+  typeText: { fontSize: 10, fontWeight: '900', color: '#FFF', letterSpacing: 1 },
+  distanceText: { fontSize: 11, color: COLORS.textMuted, fontWeight: '800' },
+  etaContainer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.background, padding: SPACING.lg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  typeBadge: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.round,
-  },
-  typeText: {
-    fontSize: FONTS.size.sm,
-    fontWeight: '700',
-  },
-  distanceText: {
-    fontSize: FONTS.size.sm,
-    color: COLORS.textSecondary,
-  },
-  etaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  etaLabel: {
-    fontSize: FONTS.size.md,
-    color: COLORS.textSecondary,
-    flex: 1,
-  },
-  etaValue: {
-    fontSize: FONTS.size.xl,
-    fontWeight: '700',
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  locationText: {
-    fontSize: FONTS.size.sm,
-    color: COLORS.textSecondary,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
+  etaBox: { flex: 1 },
+  etaLabel: { fontSize: 10, color: COLORS.textMuted, fontWeight: '800', marginBottom: 4 },
+  etaValue: { fontSize: 28, fontWeight: '900' },
+  actions: { flexDirection: 'row', gap: SPACING.md },
   mapsBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    backgroundColor: COLORS.primary,
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: COLORS.primary, paddingVertical: 16, borderRadius: RADIUS.md,
   },
-  mapsBtnText: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: FONTS.size.md,
-  },
+  mapsBtnText: { color: '#000', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 },
   completeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    backgroundColor: COLORS.success,
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: COLORS.success, paddingVertical: 16, borderRadius: RADIUS.md,
   },
-  completeBtnText: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: FONTS.size.md,
-  },
-  callRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingTop: SPACING.xs,
-  },
-  callText: {
-    fontSize: FONTS.size.sm,
-    color: COLORS.danger,
-    fontWeight: '500',
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.xxl,
-  },
-  emptyTitle: {
-    fontSize: FONTS.size.xl,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginTop: SPACING.xl,
-  },
-  emptySubtitle: {
-    fontSize: FONTS.size.md,
-    color: COLORS.textSecondary,
+  completeBtnText: { color: '#FFF', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 },
+  callBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: COLORS.danger, paddingVertical: 12, borderRadius: RADIUS.md,
     marginTop: SPACING.sm,
-    textAlign: 'center',
-    lineHeight: 22,
   },
+  callBtnText: { color: '#FFF', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xxl },
+  emptyIconContainer: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.xl, borderWidth: 1, borderColor: COLORS.border,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '900', color: COLORS.text, letterSpacing: 1 },
+  emptySubtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: SPACING.md, textAlign: 'center', lineHeight: 22, fontWeight: '500' },
 });

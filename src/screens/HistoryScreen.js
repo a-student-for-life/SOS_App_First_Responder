@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
@@ -23,20 +24,22 @@ function HistoryItem({ item }) {
   return (
     <View style={styles.card}>
       <View style={styles.iconCol}>
-        <View style={[styles.icon, { backgroundColor: COLORS.successLight }]}>
-          <Icon name="shield-checkmark" size={20} color={COLORS.success} />
+        <View style={[styles.icon, { backgroundColor: COLORS.successLight, borderColor: COLORS.success, borderWidth: 1 }]}>
+          <Icon name="shield-checkmark" size={22} color={COLORS.success} />
         </View>
         <View style={styles.timeline} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.itemTitle}>Emergency Alert</Text>
-        <Text style={styles.responder}>Responder: {item.responder}</Text>
+        <View style={styles.itemHeader}>
+          <Text style={styles.itemTitle}>EMERGENCY RESOLVED</Text>
+          <Text style={styles.timeLabel}>{time}</Text>
+        </View>
+        <Text style={styles.responder}>RESPONDER: <Text style={{color: COLORS.text}}>{item.responder.toUpperCase()}</Text></Text>
         <View style={styles.metaRow}>
-          <Text style={styles.meta}>{formatted}</Text>
-          <Text style={styles.metaDot}>·</Text>
-          <Text style={styles.meta}>{time}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: COLORS.successLight }]}>
-            <Text style={[styles.statusText, { color: COLORS.success }]}>{item.status}</Text>
+          <Icon name="calendar-outline" size={14} color={COLORS.textMuted} />
+          <Text style={styles.meta}>{formatted.toUpperCase()}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: COLORS.success }]}>
+            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
           </View>
         </View>
       </View>
@@ -49,9 +52,10 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
-        <Text style={styles.title}>History</Text>
-        <Text style={styles.subtitle}>{emergencyHistory.length} events</Text>
+        <Text style={styles.title}>LOG HISTORY</Text>
+        <Text style={styles.subtitle}>{emergencyHistory.length} ARCHIVED EVENTS</Text>
       </View>
 
       <FlatList
@@ -61,10 +65,12 @@ export default function HistoryScreen() {
         renderItem={({ item }) => <HistoryItem item={item} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Icon name="shield-checkmark-outline" size={64} color={COLORS.textMuted} />
-            <Text style={styles.emptyTitle}>No emergencies yet</Text>
+            <View style={styles.emptyIconContainer}>
+              <Icon name="archive-outline" size={60} color={COLORS.surfaceAlt} />
+            </View>
+            <Text style={styles.emptyTitle}>NO HISTORY FOUND</Text>
             <Text style={styles.emptySubtitle}>
-              Your SOS history will appear here after you send your first alert.
+              Your emergency log is empty. Records of SOS alerts will appear here after resolution.
             </Text>
           </View>
         }
@@ -81,23 +87,26 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.xl,
+    backgroundColor: COLORS.background,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   title: {
-    fontSize: FONTS.size.xl,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '900',
     color: COLORS.text,
+    letterSpacing: 1,
   },
   subtitle: {
-    fontSize: FONTS.size.sm,
+    fontSize: 11,
     color: COLORS.textMuted,
-    marginTop: 2,
+    fontWeight: '800',
+    marginTop: 6,
+    letterSpacing: 0.5,
   },
   list: {
-    padding: SPACING.xl,
+    padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
   card: {
@@ -105,16 +114,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     padding: SPACING.lg,
-    marginBottom: SPACING.sm,
-    ...SHADOW.sm,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     gap: SPACING.md,
+    ...SHADOW.sm,
   },
   iconCol: {
     alignItems: 'center',
   },
   icon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -122,62 +133,83 @@ const styles = StyleSheet.create({
   timeline: {
     flex: 1,
     width: 2,
-    backgroundColor: COLORS.borderLight,
+    backgroundColor: COLORS.border,
     marginTop: SPACING.xs,
+    borderStyle: 'dashed',
+    borderRadius: 1,
   },
   content: {
     flex: 1,
   },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   itemTitle: {
-    fontSize: FONTS.size.md,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.success,
+    letterSpacing: 0.5,
+  },
+  timeLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
   },
   responder: {
-    fontSize: FONTS.size.sm,
+    fontSize: 12,
     color: COLORS.textSecondary,
+    fontWeight: '600',
     marginTop: 2,
+    letterSpacing: 0.3,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    marginTop: SPACING.sm,
+    gap: SPACING.sm,
+    marginTop: SPACING.lg,
   },
   meta: {
-    fontSize: FONTS.size.xs,
+    fontSize: 11,
     color: COLORS.textMuted,
-  },
-  metaDot: {
-    color: COLORS.textMuted,
-    fontSize: FONTS.size.xs,
+    fontWeight: '700',
   },
   statusBadge: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: RADIUS.round,
+    borderRadius: RADIUS.sm,
     marginLeft: 'auto',
   },
   statusText: {
-    fontSize: FONTS.size.xs,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
   },
   emptyState: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     paddingHorizontal: SPACING.xxl,
   },
+  emptyIconContainer: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.xl, borderWidth: 1, borderColor: COLORS.border,
+  },
   emptyTitle: {
-    fontSize: FONTS.size.lg,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.text,
-    marginTop: SPACING.lg,
+    letterSpacing: 1,
   },
   emptySubtitle: {
-    fontSize: FONTS.size.sm,
+    fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.md,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '500',
   },
 });

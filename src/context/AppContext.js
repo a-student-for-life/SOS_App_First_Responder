@@ -10,7 +10,12 @@ import {
   acceptSOS,
   completeSOSAsResponder,
   getDistanceKm,
+  getUserContacts,
+  saveUserContacts,
+  signOut,
 } from '../services/SOSService';
+import * as NotificationService from '../services/NotificationService';
+import { sendEmergencySMS } from '../services/SMSService';
 
 const AppContext = createContext(null);
 
@@ -40,16 +45,39 @@ export function AppProvider({ children }) {
   const [emergencyHistory, setEmergencyHistory] = useState([]);
   const [userId, setUserId] = useState(null);
   const [responderName, setResponderName] = useState('Responder');
+  const [nearbyResponders, setNearbyResponders] = useState([]);
+  const [trustedContacts, setTrustedContacts] = useState([]);
 
   const countdownRef = useRef(null);
   const alertListenerRef = useRef(null);
   const feedListenerRef = useRef(null);
+  const seenAlertsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (userLocation) {
+      // Mock some responders around the user
+      const mocks = [
+        { id: 'r1', lat: userLocation.lat + 0.002, lng: userLocation.lng + 0.001, name: 'Rahul' },
+        { id: 'r2', lat: userLocation.lat - 0.001, lng: userLocation.lng + 0.003, name: 'Sonia' },
+        { id: 'r3', lat: userLocation.lat + 0.003, lng: userLocation.lng - 0.002, name: 'Amit' },
+      ];
+      setNearbyResponders(mocks);
+    }
+  }, [userLocation]);
 
   useEffect(() => {
     (async () => {
       try {
         const user = await ensureSignedIn();
         setUserId(user.uid);
+        
+        // Fetch contacts
+        const contacts = await getUserContacts();
+        setTrustedContacts(contacts);
+        
+        // Request permissions
+        await NotificationService.requestNotificationPermission();
+        
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -68,6 +96,19 @@ export function AppProvider({ children }) {
       return;
     }
     feedListenerRef.current = listenForAlerts((alerts) => {
+      const broadcasting = alerts.filter(a => a.status === 'broadcasting');
+      
+      // Check for new alerts
+      broadcasting.forEach(a => {
+        if (!seenAlertsRef.current.has(a.id)) {
+          seenAlertsRef.current.add(a.id);
+          const dist = userLocation 
+            ? getDistanceKm(userLocation.lat, userLocation.lng, a.lat, a.lng)
+            : 0;
+          NotificationService.sendLocalSOSAlert('Someone', dist);
+        }
+      });
+
       const enriched = alerts
         .filter(a => a.status === 'broadcasting' || a.id === responderActiveAlert?.id)
         .map(a => ({
@@ -98,14 +139,27 @@ export function AppProvider({ children }) {
 
   const broadcastSOS = async () => {
     setSosStatus(SOS_STATUS.BROADCASTING);
+    NotificationService.sendBroadcastingNotification();
+    
+    // Trigger Automated SMS to Trusted Contacts (Simulated for Demo)
+    if (trustedContacts.length > 0) {
+      sendEmergencySMS(trustedContacts, userLocation || { lat: 19.2403, lng: 73.1305 });
+    }
+
     try {
       const lat = userLocation?.lat ?? 19.2403;
       const lng = userLocation?.lng ?? 73.1305;
       const alertId = await sendSOS(lat, lng);
       setActiveAlertId(alertId);
       alertListenerRef.current = listenToMyAlert(alertId, (data) => {
+        const oldData = activeAlertData;
         setActiveAlertData(data);
-        if (data.status === 'accepted') setSosStatus(SOS_STATUS.ACCEPTED);
+        if (data.status === 'accepted') {
+          setSosStatus(SOS_STATUS.ACCEPTED);
+          if (!oldData || oldData.status !== 'accepted') {
+            NotificationService.sendSOSConfirmation(data.responderName, 5);
+          }
+        }
         if (data.status === 'resolved') {
           setSosStatus(SOS_STATUS.RESOLVED);
           setEmergencyHistory(prev => [{
@@ -161,6 +215,28 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateContacts = async (newContacts) => {
+    try {
+      await saveUserContacts(newContacts);
+      setTrustedContacts(newContacts);
+    } catch (e) {
+      console.error('Update contacts failed:', e);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut();
+      setUserId(null);
+      setSosStatus(SOS_STATUS.IDLE);
+      setResponderActiveAlert(null);
+      setActiveAlertId(null);
+      setActiveAlertData(null);
+    } catch (e) {
+      console.error('Logout failed:', e);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (alertListenerRef.current) alertListenerRef.current();
@@ -178,12 +254,14 @@ export function AppProvider({ children }) {
       incomingAlerts,
       acceptAlert,
       completeAlert,
+      logout,
       emergencyHistory,
       responderAvailable, setResponderAvailable,
       responderActiveAlert,
       responderName, setResponderName,
-      userId,
-      nearbyResponders: [],
+      userId, setUserId,
+      nearbyResponders,
+      trustedContacts, updateContacts,
     }}>
       {children}
     </AppContext.Provider>

@@ -11,6 +11,8 @@ import {
   serverTimestamp,
   GeoPoint,
   deleteDoc,
+  getDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -24,6 +26,24 @@ export async function ensureSignedIn() {
 
 export function getCurrentUserId() {
   return auth.currentUser?.uid || null;
+}
+
+// ─── User Profile & Contacts ────────────────────────────
+export async function getUserContacts() {
+  const user = await ensureSignedIn();
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  if (userDoc.exists()) {
+    return userDoc.data().contacts || [];
+  }
+  return [];
+}
+
+export async function saveUserContacts(contacts) {
+  const user = await ensureSignedIn();
+  await setDoc(doc(db, 'users', user.uid), {
+    contacts,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
 
 // ─── Victim: Send SOS ────────────────────────────────────
@@ -115,6 +135,10 @@ export async function completeSOSAsResponder(alertId) {
     status: 'resolved',
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function signOut() {
+  await auth.signOut();
 }
 
 // ─── Helpers ─────────────────────────────────────────────
