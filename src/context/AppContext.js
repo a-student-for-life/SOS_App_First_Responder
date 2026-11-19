@@ -1,5 +1,6 @@
 // src/context/AppContext.js
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import {
   ensureSignedIn,
@@ -16,6 +17,11 @@ import {
 } from '../services/SOSService';
 import * as NotificationService from '../services/NotificationService';
 import { sendEmergencySMS } from '../services/SMSService';
+import { getFreshLocation } from '../services/LocationService';
+
+// Used only when no GPS fix or last known position exists. The alert is then
+// marked locationApprox so responders and contacts know it isn't exact.
+const FALLBACK_LOCATION = { lat: 19.2403, lng: 73.1305 };
 
 const AppContext = createContext(null);
 
@@ -52,6 +58,18 @@ export function AppProvider({ children }) {
   const alertListenerRef = useRef(null);
   const feedListenerRef = useRef(null);
   const seenAlertsRef = useRef(new Set());
+  const freshLocationRef = useRef(null);       // GPS fix started when the countdown begins
+  const acceptedNotifiedRef = useRef(false);   // "Responder found" shown once per SOS
+  const cancelledRef = useRef(false);          // set if the user cancels while we wait for GPS
+
+  // Tapping the "text your trusted contacts" notification opens the SMS app.
+  useEffect(() => {
+    const sub = NotificationService.addResponseListener((response) => {
+      const smsUrl = response?.notification?.request?.content?.data?.smsUrl;
+      if (smsUrl) Linking.openURL(smsUrl).catch((e) => console.warn('Could not open SMS app:', e));
+    });
+    return () => sub && sub.remove();
+  }, []);
 
   useEffect(() => {
     if (userLocation) {
@@ -125,6 +143,9 @@ export function AppProvider({ children }) {
   const startSOS = () => {
     setSosStatus(SOS_STATUS.COUNTDOWN);
     setCountdown(5);
+    // Get a fresh position during the countdown; the one from app start may be stale.
+    cancelledRef.current = false;
+    freshLocationRef.current = getFreshLocation(8000);
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -141,22 +162,36 @@ export function AppProvider({ children }) {
     setSosStatus(SOS_STATUS.BROADCASTING);
     NotificationService.sendBroadcastingNotification();
     
-    // Trigger Automated SMS to Trusted Contacts (Simulated for Demo)
+    let fresh = null;
+    try {
+      fresh = freshLocationRef.current ? await freshLocationRef.current : null;
+    } catch (e) {
+      fresh = null;
+    }
+    freshLocationRef.current = null;
+    if (cancelledRef.current) return; // cancelled while waiting for the GPS fix
+    const loc = fresh || userLocation;
+    const locationApprox = !loc;
+    const { lat, lng } = loc || FALLBACK_LOCATION;
+    if (fresh) setUserLocation({ lat: fresh.lat, lng: fresh.lng });
+
+    // Phones don't allow silent SMS: this shows a "tap to text your contacts" notification.
     if (trustedContacts.length > 0) {
-      sendEmergencySMS(trustedContacts, userLocation || { lat: 19.2403, lng: 73.1305 });
+      sendEmergencySMS(trustedContacts, { lat, lng }, { locationApprox })
+        .catch((e) => console.warn('SMS prompt failed:', e));
     }
 
     try {
-      const lat = userLocation?.lat ?? 19.2403;
-      const lng = userLocation?.lng ?? 73.1305;
-      const alertId = await sendSOS(lat, lng);
+      const alertId = await sendSOS(lat, lng, { locationApprox });
       setActiveAlertId(alertId);
+      acceptedNotifiedRef.current = false;
       alertListenerRef.current = listenToMyAlert(alertId, (data) => {
-        const oldData = activeAlertData;
         setActiveAlertData(data);
         if (data.status === 'accepted') {
           setSosStatus(SOS_STATUS.ACCEPTED);
-          if (!oldData || oldData.status !== 'accepted') {
+          // A ref, not state: the listener's closure would always see the first value.
+          if (!acceptedNotifiedRef.current) {
+            acceptedNotifiedRef.current = true;
             NotificationService.sendSOSConfirmation(data.responderName, 5);
           }
         }
@@ -183,6 +218,7 @@ export function AppProvider({ children }) {
 
   const cancelSOS = async () => {
     clearInterval(countdownRef.current);
+    cancelledRef.current = true;
     if (activeAlertId) {
       await resolveSOSAsVictim(activeAlertId).catch(() => {});
       if (alertListenerRef.current) { alertListenerRef.current(); alertListenerRef.current = null; }
@@ -202,7 +238,12 @@ export function AppProvider({ children }) {
       await acceptSOS(alert.id, responderName);
       setResponderActiveAlert(alert);
     } catch (e) {
-      console.error('Accept failed:', e);
+      if (e?.code === 'ALREADY_TAKEN') {
+        Alert.alert('Already taken', 'Another responder has already accepted this SOS, or it was cancelled.');
+      } else {
+        console.error('Accept failed:', e);
+        Alert.alert('Could not accept', 'Check your connection and try again.');
+      }
     }
   };
 

@@ -58,13 +58,18 @@ export async function sendBroadcastingNotification() {
   });
 }
 
-export async function sendSMSConfirmationNotification(contactCount) {
+// Phones don't let apps send SMS silently, so we can't text contacts for the user.
+// This notification says so plainly; tapping it opens the SMS app with the
+// message and numbers filled in (handled by the response listener in AppContext).
+export async function sendSMSReadyNotification(contactCount, smsUrl) {
+  const who = contactCount === 1 ? '1 trusted contact' : `${contactCount} trusted contacts`;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '✉️ Trusted Contacts Alerted',
-      body: `Emergency SMS and location sent to ${contactCount} trusted contacts.`,
+      title: '✉️ Tap to text your trusted contacts',
+      body: `Not sent yet. Tap to send your location to ${who}.`,
       sound: true,
       priority: Notifications.AndroidNotificationPriority.HIGH,
+      data: { smsUrl },
     },
     trigger: null,
   });

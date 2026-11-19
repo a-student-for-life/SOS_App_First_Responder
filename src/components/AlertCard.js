@@ -42,7 +42,7 @@ export default function AlertCard({ alert, onAccept, onDecline, onPress, compact
         </View>
         <View style={styles.info}>
           <Text style={styles.type}>{alert.emergencyType}</Text>
-          <Text style={styles.meta}>{alert.distance} km · {timeAgo(alert.timestamp ?? alert.createdAt)}</Text>
+          <Text style={styles.meta}>{alert.distance} km{alert.locationApprox ? ' (approx.)' : ''} · {timeAgo(alert.timestamp ?? alert.createdAt)}</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: alert.status === 'accepted' ? COLORS.successLight : COLORS.surfaceAlt }]}>
           <Text style={[styles.badgeText, { color: alert.status === 'accepted' ? COLORS.success : COLORS.textMuted }]}>
@@ -77,7 +77,7 @@ export default function AlertCard({ alert, onAccept, onDecline, onPress, compact
       <View style={styles.detailsContainer}>
         <View style={styles.detailRow}>
           <Icon name="location" size={16} color={COLORS.primary} />
-          <Text style={styles.detail}>{alert.distance} km away</Text>
+          <Text style={styles.detail}>{alert.distance} km away{alert.locationApprox ? ' · location approximate' : ''}</Text>
         </View>
         <View style={styles.detailRow}>
           <Icon name="time-outline" size={16} color={COLORS.warning} />

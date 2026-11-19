@@ -1,37 +1,31 @@
 // src/services/SMSService.js
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as NotificationService from './NotificationService';
 
 /**
- * Handles the emergency SMS triggering logic.
- * In a real production app, this would ideally use a backend API (like Twilio)
- * to send background SMS, as mobile OS's block background SMS for security.
- * 
- * For this DEMO:
- * 1. It simulates the "Automatic Trigger" with a high-priority notification.
- * 2. It prepares the real system SMS link as a fallback.
+ * Prepares the emergency SMS to trusted contacts.
+ *
+ * Android and iOS do not let an app send SMS in the background, so nothing is
+ * sent automatically. We build an sms: link with the numbers and message filled
+ * in, and show a notification that opens it when tapped. Sending SMS without a
+ * tap would need a server (e.g. Twilio).
+ *
+ * Returns the sms: URL (or null if there are no contacts).
  */
-export async function sendEmergencySMS(contacts, location) {
-  if (!contacts || contacts.length === 0) return;
+export async function sendEmergencySMS(contacts, location, { locationApprox = false } = {}) {
+  const numbers = (contacts || []).map(c => c.phone).filter(Boolean);
+  if (numbers.length === 0) return null;
 
   const locationUrl = `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
-  const message = `EMERGENCY SOS: I need help! My current location is: ${locationUrl}`;
+  const message = locationApprox
+    ? `EMERGENCY SOS: I need help! My exact location could not be found. Last known area: ${locationUrl}`
+    : `EMERGENCY SOS: I need help! My current location is: ${locationUrl}`;
 
-  console.log(`[DEMO] Triggering Emergency SMS to: ${contacts.map(c => c.name).join(', ')}`);
-  console.log(`[DEMO] Message: ${message}`);
-
-  // 1. SIMULATED TRIGGER (For Demo purposes)
-  // We show a local notification to "confirm" to the user that the system has acted.
-  await NotificationService.sendSMSConfirmationNotification(contacts.length);
-
-  // 2. REAL FALLBACK (Open Native SMS)
-  // We'll prepare the numbers. Note: Different separators for iOS/Android
+  // Different separators and query syntax for iOS and Android
   const separator = Platform.OS === 'ios' ? ';' : ',';
-  const recipients = contacts.map(c => c.phone).join(separator);
+  const recipients = numbers.join(separator);
   const url = `sms:${recipients}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(message)}`;
 
-  // We don't want to interrupt the SOS screen immediately, 
-  // but we provide the capability to open it if needed.
-  // In a real automated "Elite" system, this would happen via a server.
+  await NotificationService.sendSMSReadyNotification(numbers.length, url);
   return url;
 }

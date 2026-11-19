@@ -13,6 +13,7 @@ import {
   deleteDoc,
   getDoc,
   setDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -51,13 +52,14 @@ export async function saveUserContacts(contacts) {
  * Creates a new SOS alert in Firestore.
  * Returns the document ID (used to track this alert).
  */
-export async function sendSOS(lat, lng) {
+export async function sendSOS(lat, lng, { locationApprox = false } = {}) {
   const user = await ensureSignedIn();
   const docRef = await addDoc(collection(db, 'sos_alerts'), {
     victimId: user.uid,
     location: new GeoPoint(lat, lng),
     lat,
     lng,
+    locationApprox,                    // true when no GPS fix was available
     status: 'broadcasting',
     responderId: null,
     responderName: null,
@@ -115,15 +117,26 @@ export function listenForAlerts(onChange) {
 
 /**
  * Responder accepts an SOS alert.
- * Writes their userId and name into the document.
+ * Runs in a transaction so that only the first responder to accept wins:
+ * if someone else already accepted (or the victim cancelled), this throws
+ * an Error with code 'ALREADY_TAKEN' and nothing is written.
  */
 export async function acceptSOS(alertId, responderName) {
   const user = await ensureSignedIn();
-  await updateDoc(doc(db, 'sos_alerts', alertId), {
-    status: 'accepted',
-    responderId: user.uid,
-    responderName: responderName || 'Responder',
-    updatedAt: serverTimestamp(),
+  const ref = doc(db, 'sos_alerts', alertId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists() || snap.data().status !== 'broadcasting') {
+      const err = new Error('This SOS has already been accepted or closed.');
+      err.code = 'ALREADY_TAKEN';
+      throw err;
+    }
+    tx.update(ref, {
+      status: 'accepted',
+      responderId: user.uid,
+      responderName: responderName || 'Responder',
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 

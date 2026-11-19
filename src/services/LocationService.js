@@ -50,34 +50,26 @@ export function watchLocation(callback) {
 }
 
 /**
- * Calculate distance between two coordinates using Haversine formula.
- * Returns distance in kilometers.
+ * Current position, or null if it can't be found within `timeoutMs`.
+ * Falls back to the phone's last known position.
  */
-export function calculateDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371; // Earth radius in km
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return +(R * c).toFixed(2);
+export async function getFreshLocation(timeoutMs = 8000) {
+  try {
+    const fix = await Promise.race([
+      getCurrentLocation(),
+      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (fix) return fix;
+  } catch (e) {
+    // permission denied or GPS off: try the last known position below
+  }
+  try {
+    const last = await Location.getLastKnownPositionAsync();
+    if (last) return { lat: last.coords.latitude, lng: last.coords.longitude, accuracy: last.coords.accuracy };
+  } catch (e) {
+    // ignore
+  }
+  return null;
 }
 
-function toRad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-/**
- * Find responders within a given radius (in km) of a location.
- */
-export function findNearbyResponders(userLat, userLng, responders, radiusKm = 5) {
-  return responders
-    .map(r => ({
-      ...r,
-      distance: calculateDistance(userLat, userLng, r.lat, r.lng),
-    }))
-    .filter(r => r.distance <= radiusKm)
-    .sort((a, b) => a.distance - b.distance);
-}
+// Distance helpers live in SOSService.getDistanceKm.
